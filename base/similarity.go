@@ -1,15 +1,14 @@
 package base
 
 import (
-	"gonum.org/v1/gonum/stat"
 	"math"
 )
 
 // FuncSimilarity computes the similarity between a pair of vectors.
-type FuncSimilarity func(a, b *SparseVector) float64
+type FuncSimilarity func(a, b *MarginalSubSet) float64
 
 // CosineSimilarity computes the cosine similarity between a pair of vectors.
-func CosineSimilarity(a, b *SparseVector) float64 {
+func CosineSimilarity(a, b *MarginalSubSet) float64 {
 	m, n, l := .0, .0, .0
 	a.ForIntersection(b, func(index int, a, b float64) {
 		m += a * a
@@ -20,7 +19,7 @@ func CosineSimilarity(a, b *SparseVector) float64 {
 }
 
 // MSDSimilarity computes the Mean Squared Difference similarity between a pair of vectors.
-func MSDSimilarity(a, b *SparseVector) float64 {
+func MSDSimilarity(a, b *MarginalSubSet) float64 {
 	count, sum := 0.0, 0.0
 	a.ForIntersection(b, func(index int, a, b float64) {
 		sum += (a - b) * (a - b)
@@ -30,11 +29,11 @@ func MSDSimilarity(a, b *SparseVector) float64 {
 }
 
 // PearsonSimilarity computes the absolute Pearson correlation coefficient between a pair of vectors.
-func PearsonSimilarity(a, b *SparseVector) float64 {
+func PearsonSimilarity(a, b *MarginalSubSet) float64 {
 	// Mean of a
-	meanA := stat.Mean(a.Values, nil)
+	meanA := a.Mean()
 	// Mean of b
-	meanB := stat.Mean(b.Values, nil)
+	meanB := b.Mean()
 	// Mean-centered cosine
 	m, n, l := .0, .0, .0
 	a.ForIntersection(b, func(index int, a, b float64) {
@@ -45,4 +44,13 @@ func PearsonSimilarity(a, b *SparseVector) float64 {
 		l += ratingA * ratingB
 	})
 	return math.Abs(l) / (math.Sqrt(m) * math.Sqrt(n))
+}
+
+// ImplicitSimilarity computes similarity between two vectors with implicit feedback.
+func ImplicitSimilarity(a, b *MarginalSubSet) float64 {
+	intersect := 0.0
+	a.ForIntersection(b, func(index int, a, b float64) {
+		intersect++
+	})
+	return intersect / (float64(a.Len()) + float64(b.Len()) - intersect)
 }

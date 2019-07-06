@@ -1,6 +1,10 @@
 package core
 
-import "os/user"
+import (
+	"log"
+	"os"
+	"os/user"
+)
 
 // Built-in Data set
 type _BuiltInDataSet struct {
@@ -65,15 +69,27 @@ var builtInDataSets = map[string]_BuiltInDataSet{
 
 // The Data directories
 var (
-	downloadDir string
-	dataSetDir  string
-	TempDir     string
+	GorseDir   string
+	DataSetDir string
+	TempDir    string
 )
 
 func init() {
-	usr, _ := user.Current()
-	gorseDir := usr.HomeDir + "/.gorse"
-	downloadDir = gorseDir + "/download"
-	dataSetDir = gorseDir + "/datasets"
-	TempDir = gorseDir + "/temp"
+	usr, err := user.Current()
+	if err != nil {
+		log.Fatal("Error while init() file built_in.go in package core "+
+			"see https://github.com/zhenghaoz/gorse/issues/3", err)
+	}
+
+	GorseDir = usr.HomeDir + "/.gorse"
+	DataSetDir = GorseDir + "/dataset"
+	TempDir = GorseDir + "/temp"
+
+	// create all folders
+	if err = os.MkdirAll(DataSetDir, os.ModePerm); err != nil {
+		panic(err)
+	}
+	if err = os.MkdirAll(TempDir, os.ModePerm); err != nil {
+		panic(err)
+	}
 }

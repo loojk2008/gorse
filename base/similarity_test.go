@@ -9,40 +9,33 @@ import (
 const simTestEpsilon = 1e-3
 
 func TestCosine(t *testing.T) {
-	a := NewSparseVector()
-	a.Add(1, 4)
-	a.Add(2, 5)
-	a.Add(3, 6)
-	b := NewSparseVector()
-	b.Add(0, 0)
-	b.Add(1, 1)
-	b.Add(2, 2)
+	indexer := NewTestIndexer([]int{0, 1, 2, 3})
+	a := NewMarginalSubSet(indexer, []int{1, 2, 3}, []float64{4, 5, 6}, []int{0, 1, 2})
+	b := NewMarginalSubSet(indexer, []int{0, 1, 2}, []float64{0, 1, 2}, []int{0, 1, 2})
 	sim := CosineSimilarity(a, b)
 	assert.False(t, math.Abs(sim-0.978) > simTestEpsilon)
 }
 
 func TestMSD(t *testing.T) {
-	a := NewSparseVector()
-	a.Add(1, 4)
-	a.Add(2, 5)
-	a.Add(3, 6)
-	b := NewSparseVector()
-	b.Add(0, 0)
-	b.Add(1, 1)
-	b.Add(2, 2)
+	indexer := NewTestIndexer([]int{0, 1, 2, 3})
+	a := NewMarginalSubSet(indexer, []int{1, 2, 3}, []float64{4, 5, 6}, []int{0, 1, 2})
+	b := NewMarginalSubSet(indexer, []int{0, 1, 2}, []float64{0, 1, 2}, []int{0, 1, 2})
 	sim := MSDSimilarity(a, b)
 	assert.False(t, math.Abs(sim-0.1) > simTestEpsilon)
 }
 
 func TestPearson(t *testing.T) {
-	a := NewSparseVector()
-	a.Add(1, 4)
-	a.Add(2, 5)
-	a.Add(3, 6)
-	b := NewSparseVector()
-	b.Add(0, 0)
-	b.Add(1, 1)
-	b.Add(2, 2)
+	indexer := NewTestIndexer([]int{0, 1, 2, 3})
+	a := NewMarginalSubSet(indexer, []int{1, 2, 3}, []float64{4, 5, 6}, []int{0, 1, 2})
+	b := NewMarginalSubSet(indexer, []int{0, 1, 2}, []float64{0, 1, 2}, []int{0, 1, 2})
 	sim := PearsonSimilarity(a, b)
 	assert.False(t, math.Abs(sim) > simTestEpsilon)
+}
+
+func TestImplicitSimilarity(t *testing.T) {
+	indexer := NewTestIndexer([]int{0, 1, 2, 3})
+	a := NewMarginalSubSet(indexer, []int{1, 2, 3}, []float64{4, 5, 6}, []int{0, 1, 2})
+	b := NewMarginalSubSet(indexer, []int{0, 1, 2}, []float64{0, 1, 2}, []int{0, 1, 2})
+	sim := ImplicitSimilarity(a, b)
+	assert.False(t, math.Abs(sim-0.5) > simTestEpsilon)
 }

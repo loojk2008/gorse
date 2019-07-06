@@ -61,8 +61,72 @@ func (tester *EvaluatorTesterModel) SetParams(params base.Params) {
 	panic("EvaluatorTesterModel.SetParams() should never be called.")
 }
 
-func (tester *EvaluatorTesterModel) Fit(set *DataSet, options ...RuntimeOption) {
+func (tester *EvaluatorTesterModel) Fit(set DataSetInterface, options *base.RuntimeOptions) {
 	panic("EvaluatorTesterModel.Fit() should never be called.")
+}
+
+func NewTestIndexer(id []int) *base.Indexer {
+	indexer := base.NewIndexer()
+	for _, v := range id {
+		indexer.Add(v)
+	}
+	return indexer
+}
+
+func TestRMSE(t *testing.T) {
+	a := []float64{0, 0, 0}
+	b := []float64{-2.0, 0, 2.0}
+	if math.Abs(RMSE(a, b)-1.63299) > evalEpsilon {
+		t.Fail()
+	}
+}
+
+func TestMAE(t *testing.T) {
+	a := []float64{0, 0, 0}
+	b := []float64{-2.0, 0, 2.0}
+	if math.Abs(MAE(a, b)-1.33333) > evalEpsilon {
+		t.Fail()
+	}
+}
+
+func NewTestTargetSet(ids []int) *base.MarginalSubSet {
+	indexer := NewTestIndexer(ids)
+	values := make([]float64, len(ids))
+	subset := make([]int, len(ids))
+	for i := range subset {
+		subset[i] = i
+	}
+	return base.NewMarginalSubSet(indexer, subset, values, subset)
+}
+
+func TestNDCG(t *testing.T) {
+	targetSet := NewTestTargetSet([]int{1, 3, 5, 7})
+	rankList := []int{0, 1, 2, 3, 4, 5, 6, 7, 8, 9}
+	EqualEpsilon(t, NDCG(targetSet, rankList), 0.6766372989, evalEpsilon)
+}
+
+func TestPrecision(t *testing.T) {
+	targetSet := NewTestTargetSet([]int{1, 3, 5, 7})
+	rankList := []int{0, 1, 2, 3, 4, 5, 6, 7, 8, 9}
+	EqualEpsilon(t, Precision(targetSet, rankList), 0.4, evalEpsilon)
+}
+
+func TestRecall(t *testing.T) {
+	targetSet := NewTestTargetSet([]int{1, 3, 15, 17, 19})
+	rankList := []int{0, 1, 2, 3, 4, 5, 6, 7, 8, 9}
+	EqualEpsilon(t, Recall(targetSet, rankList), 0.4, evalEpsilon)
+}
+
+func TestAP(t *testing.T) {
+	targetSet := NewTestTargetSet([]int{1, 3, 7, 9})
+	rankList := []int{0, 1, 2, 3, 4, 5, 6, 7, 8, 9}
+	EqualEpsilon(t, MAP(targetSet, rankList), 0.44375, evalEpsilon)
+}
+
+func TestRR(t *testing.T) {
+	targetSet := NewTestTargetSet([]int{3})
+	rankList := []int{0, 1, 2, 3, 4, 5, 6, 7, 8, 9}
+	EqualEpsilon(t, MRR(targetSet, rankList), 0.25, evalEpsilon)
 }
 
 func TestAUC(t *testing.T) {
@@ -73,52 +137,6 @@ func TestAUC(t *testing.T) {
 	a := NewEvaluatorTesterModel([]int{0, 0, 0, 1, 1, 1, 2, 2, 2},
 		[]int{0, 1, 2, 0, 1, 2, 0, 1, 2},
 		[]float64{1.0, 0.0, 0.0, 0.0, 0.5, 0.0, 0.0, 0.0, 1.0})
-	b := NewDataSet(NewDataTable([]int{0, 1, 2}, []int{0, 1, 2}, []float64{1.0, 0.5, 1.0}))
-	assert.Equal(t, 1.0, AUC(a, b, nil))
-}
-
-func TestRMSE(t *testing.T) {
-	a := []float64{0, 0, 0}
-	b := []float64{-2.0, 0, 2.0}
-	if math.Abs(rootMeanSquareError(a, b)-1.63299) > evalEpsilon {
-		t.Fail()
-	}
-}
-
-func TestMAE(t *testing.T) {
-	a := []float64{0, 0, 0}
-	b := []float64{-2.0, 0, 2.0}
-	if math.Abs(meanAbsoluteError(a, b)-1.33333) > evalEpsilon {
-		t.Fail()
-	}
-}
-
-func TestNDCG(t *testing.T) {
-	targetSet := map[int]float64{1: 0, 3: 0, 5: 0, 7: 0}
-	rankList := []int{0, 1, 2, 3, 4, 5, 6, 7, 8, 9}
-	EqualEpsilon(t, nDCG(targetSet, rankList), 0.6766372989, evalEpsilon)
-}
-
-func TestPrecision(t *testing.T) {
-	targetSet := map[int]float64{1: 0, 3: 0, 5: 0, 7: 0}
-	rankList := []int{0, 1, 2, 3, 4, 5, 6, 7, 8, 9}
-	EqualEpsilon(t, precision(targetSet, rankList), 0.4, evalEpsilon)
-}
-
-func TestRecall(t *testing.T) {
-	targetSet := map[int]float64{1: 0, 3: 0, 15: 0, 17: 0, 19: 0}
-	rankList := []int{0, 1, 2, 3, 4, 5, 6, 7, 8, 9}
-	EqualEpsilon(t, recall(targetSet, rankList), 0.4, evalEpsilon)
-}
-
-func TestAP(t *testing.T) {
-	targetSet := map[int]float64{1: 0, 3: 0, 7: 0, 9: 0}
-	rankList := []int{0, 1, 2, 3, 4, 5, 6, 7, 8, 9}
-	EqualEpsilon(t, averagePrecision(targetSet, rankList), 0.44375, evalEpsilon)
-}
-
-func TestRR(t *testing.T) {
-	targetSet := map[int]float64{3: 0}
-	rankList := []int{0, 1, 2, 3, 4, 5, 6, 7, 8, 9}
-	EqualEpsilon(t, reciprocalRank(targetSet, rankList), 0.25, evalEpsilon)
+	b := NewDataSet([]int{0, 1, 2}, []int{0, 1, 2}, []float64{1.0, 0.5, 1.0})
+	assert.Equal(t, 1.0, EvaluateAUC(a, b, nil))
 }

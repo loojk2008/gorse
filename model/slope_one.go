@@ -25,10 +25,10 @@ import (
 // those items which are rated in u is S(u).
 type SlopeOne struct {
 	Base
-	GlobalMean  float64              // Mean of ratings in training set
-	UserRatings []*base.SparseVector // Ratings by each user
-	UserMeans   []float64            // Mean of each user's ratings
-	Dev         [][]float64          // Deviations
+	GlobalMean  float64                // Mean of ratings in training set
+	UserRatings []*base.MarginalSubSet // Ratings by each user
+	UserMeans   []float64              // Mean of each user's ratings
+	Dev         [][]float64            // Deviations
 }
 
 // NewSlopOne creates a SlopeOne model.
@@ -40,20 +40,20 @@ func NewSlopOne(params base.Params) *SlopeOne {
 
 // Predict by the SlopeOne model.
 func (so *SlopeOne) Predict(userId, itemId int) float64 {
-	// Convert to inner Id
-	innerUserId := so.UserIdSet.ToDenseId(userId)
-	innerItemId := so.ItemIdSet.ToDenseId(itemId)
+	// Convert to index
+	userIndex := so.UserIndexer.ToIndex(userId)
+	itemIndex := so.ItemIndexer.ToIndex(itemId)
 	prediction := 0.0
-	if innerUserId != base.NotId {
-		prediction = so.UserMeans[innerUserId]
+	if userIndex != base.NotId {
+		prediction = so.UserMeans[userIndex]
 	} else {
 		// Use global mean for new user
 		prediction = so.GlobalMean
 	}
-	if innerItemId != base.NotId {
+	if itemIndex != base.NotId {
 		sum, count := 0.0, 0.0
-		so.UserRatings[innerUserId].ForEach(func(i, index int, value float64) {
-			sum += so.Dev[innerItemId][index]
+		so.UserRatings[userIndex].ForEachIndex(func(i, index int, value float64) {
+			sum += so.Dev[itemIndex][index]
 			count++
 		})
 		if count > 0 {
@@ -64,28 +64,29 @@ func (so *SlopeOne) Predict(userId, itemId int) float64 {
 }
 
 // Fit the SlopeOne model.
-func (so *SlopeOne) Fit(trainSet *core.DataSet, setters ...core.RuntimeOption) {
+func (so *SlopeOne) Fit(trainSet core.DataSetInterface, setters *base.RuntimeOptions) {
 	// Initialize
-	so.Init(trainSet, setters)
-	so.GlobalMean = trainSet.GlobalMean
-	so.UserRatings = trainSet.DenseUserRatings
-	so.UserMeans = base.SparseVectorsMean(so.UserRatings)
+	so.Init(trainSet)
+	so.GlobalMean = trainSet.GlobalMean()
+	so.UserRatings = trainSet.Users()
+	so.UserMeans = make([]float64, trainSet.UserCount())
+	for i := 0; i < trainSet.UserCount(); i++ {
+		ratings := trainSet.UserByIndex(i)
+		so.UserMeans[i] = ratings.Mean()
+	}
 	so.Dev = base.NewMatrix(trainSet.ItemCount(), trainSet.ItemCount())
 	// Compute deviations
-	itemRatings := trainSet.DenseItemRatings
-	base.Parallel(len(itemRatings), so.fitOptions.NJobs, func(begin, end int) {
-		for i := begin; i < end; i++ {
-			for j := 0; j < i; j++ {
-				count, sum := 0.0, 0.0
-				// Find common user's ratings
-				itemRatings[i].ForIntersection(itemRatings[j], func(index int, a float64, b float64) {
-					sum += a - b
-					count++
-				})
-				if count > 0 {
-					so.Dev[i][j] = sum / count
-					so.Dev[j][i] = -so.Dev[i][j]
-				}
+	base.ParallelFor(0, trainSet.ItemCount(), func(i int) {
+		for j := 0; j < i; j++ {
+			count, sum := 0.0, 0.0
+			// Find common user's ratings
+			trainSet.ItemByIndex(i).ForIntersection(trainSet.ItemByIndex(j), func(index int, a float64, b float64) {
+				sum += a - b
+				count++
+			})
+			if count > 0 {
+				so.Dev[i][j] = sum / count
+				so.Dev[j][i] = -so.Dev[i][j]
 			}
 		}
 	})

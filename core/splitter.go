@@ -4,48 +4,48 @@ import "math/rand"
 import "github.com/zhenghaoz/gorse/base"
 
 // Split dataset to a training set and a test set with ratio.
-func Split(data *DataSet, testRatio float64) (train, test *DataSet) {
-	testSize := int(float64(data.Len()) * testRatio)
-	perm := rand.Perm(data.Len())
+func Split(data DataSetInterface, testRatio float64) (train, test DataSetInterface) {
+	testSize := int(float64(data.Count()) * testRatio)
+	perm := rand.Perm(data.Count())
 	// Test Data
 	testIndex := perm[:testSize]
-	test = NewDataSet(data.SubSet(testIndex))
+	test = data.SubSet(testIndex)
 	// Train Data
 	trainIndex := perm[testSize:]
-	train = NewDataSet(data.SubSet(trainIndex))
+	train = data.SubSet(trainIndex)
 	return
 }
 
 // Splitter split Data to train set and test set.
-type Splitter func(set Table, seed int64) ([]*DataSet, []*DataSet)
+type Splitter func(set DataSetInterface, seed int64) ([]DataSetInterface, []DataSetInterface)
 
 // NewKFoldSplitter creates a k-fold splitter.
 func NewKFoldSplitter(k int) Splitter {
-	return func(dataSet Table, seed int64) (trainFolds, testFolds []*DataSet) {
+	return func(dataSet DataSetInterface, seed int64) (trainFolds, testFolds []DataSetInterface) {
 		// Create folds
-		trainFolds = make([]*DataSet, k)
-		testFolds = make([]*DataSet, k)
+		trainFolds = make([]DataSetInterface, k)
+		testFolds = make([]DataSetInterface, k)
 		// Check nil
 		if dataSet == nil {
 			return
 		}
 		// Generate permutation
 		rand.Seed(seed)
-		perm := rand.Perm(dataSet.Len())
+		perm := rand.Perm(dataSet.Count())
 		// Split folds
-		foldSize := dataSet.Len() / k
+		foldSize := dataSet.Count() / k
 		begin, end := 0, 0
 		for i := 0; i < k; i++ {
 			end += foldSize
-			if i < dataSet.Len()%k {
+			if i < dataSet.Count()%k {
 				end++
 			}
 			// Test Data
 			testIndex := perm[begin:end]
-			testFolds[i] = NewDataSet(dataSet.SubSet(testIndex))
+			testFolds[i] = dataSet.SubSet(testIndex)
 			// Train Data
-			trainIndex := base.Concatenate(perm[0:begin], perm[end:dataSet.Len()])
-			trainFolds[i] = NewDataSet(dataSet.SubSet(trainIndex))
+			trainIndex := base.Concatenate(perm[0:begin], perm[end:dataSet.Count()])
+			trainFolds[i] = dataSet.SubSet(trainIndex)
 			begin = end
 		}
 		return trainFolds, testFolds
@@ -54,19 +54,23 @@ func NewKFoldSplitter(k int) Splitter {
 
 // NewRatioSplitter creates a ratio splitter.
 func NewRatioSplitter(repeat int, testRatio float64) Splitter {
-	return func(set Table, seed int64) (trainFolds, testFolds []*DataSet) {
-		trainFolds = make([]*DataSet, repeat)
-		testFolds = make([]*DataSet, repeat)
-		testSize := int(float64(set.Len()) * testRatio)
+	return func(dataSet DataSetInterface, seed int64) (trainFolds, testFolds []DataSetInterface) {
+		trainFolds = make([]DataSetInterface, repeat)
+		testFolds = make([]DataSetInterface, repeat)
+		// Check nil
+		if dataSet == nil {
+			return
+		}
+		testSize := int(float64(dataSet.Count()) * testRatio)
 		rand.Seed(seed)
 		for i := 0; i < repeat; i++ {
-			perm := rand.Perm(set.Len())
+			perm := rand.Perm(dataSet.Count())
 			// Test Data
 			testIndex := perm[:testSize]
-			testFolds[i] = NewDataSet(set.SubSet(testIndex))
+			testFolds[i] = dataSet.SubSet(testIndex)
 			// Train Data
 			trainIndex := perm[testSize:]
-			trainFolds[i] = NewDataSet(set.SubSet(trainIndex))
+			trainFolds[i] = dataSet.SubSet(trainIndex)
 		}
 		return trainFolds, testFolds
 	}
@@ -74,25 +78,29 @@ func NewRatioSplitter(repeat int, testRatio float64) Splitter {
 
 // NewUserLOOSplitter creates a per-user leave-one-out Data splitter.
 func NewUserLOOSplitter(repeat int) Splitter {
-	return func(dataSet Table, seed int64) ([]*DataSet, []*DataSet) {
-		trainFolds := make([]*DataSet, repeat)
-		testFolds := make([]*DataSet, repeat)
+	return func(dataSet DataSetInterface, seed int64) (trainFolds, testFolds []DataSetInterface) {
+		trainFolds = make([]DataSetInterface, repeat)
+		testFolds = make([]DataSetInterface, repeat)
+		// Check nil
+		if dataSet == nil {
+			return
+		}
 		rand.Seed(seed)
-		trainSet := NewDataSet(dataSet)
 		for i := 0; i < repeat; i++ {
 			trainUsers, trainItems, trainRatings :=
-				make([]int, 0, trainSet.Len()-trainSet.UserCount()),
-				make([]int, 0, trainSet.Len()-trainSet.UserCount()),
-				make([]float64, 0, trainSet.Len()-trainSet.UserCount())
+				make([]int, 0, dataSet.Count()-dataSet.UserCount()),
+				make([]int, 0, dataSet.Count()-dataSet.UserCount()),
+				make([]float64, 0, dataSet.Count()-dataSet.UserCount())
 			testUsers, testItems, testRatings :=
-				make([]int, 0, trainSet.UserCount()),
-				make([]int, 0, trainSet.UserCount()),
-				make([]float64, 0, trainSet.UserCount())
-			for innerUserId, irs := range trainSet.DenseUserRatings {
-				userId := trainSet.UserIdSet.ToSparseId(innerUserId)
+				make([]int, 0, dataSet.UserCount()),
+				make([]int, 0, dataSet.UserCount()),
+				make([]float64, 0, dataSet.UserCount())
+			for innerUserId := 0; innerUserId < dataSet.UserCount(); innerUserId++ {
+				irs := dataSet.UserByIndex(innerUserId)
+				userId := dataSet.UserIndexer().ToID(innerUserId)
 				out := rand.Intn(irs.Len())
-				irs.ForEach(func(i, index int, value float64) {
-					itemId := trainSet.ItemIdSet.ToSparseId(index)
+				irs.ForEachIndex(func(i, index int, value float64) {
+					itemId := dataSet.ItemIndexer().ToID(index)
 					if i == out {
 						testUsers = append(testUsers, userId)
 						testItems = append(testItems, itemId)
@@ -104,61 +112,8 @@ func NewUserLOOSplitter(repeat int) Splitter {
 					}
 				})
 			}
-			trainFolds[i] = NewDataSet(NewDataTable(trainUsers, trainItems, trainRatings))
-			testFolds[i] = NewDataSet(NewDataTable(testUsers, testItems, testRatings))
-		}
-		return trainFolds, testFolds
-	}
-}
-
-// NewUserKeepNSplitter splits users to a training set and a test set. Then,
-// add all ratings of train users and n ratings of test users to the training
-// set. The rest ratings of test set are added to the test set.
-func NewUserKeepNSplitter(repeat int, n int, testRatio float64) Splitter {
-	return func(set Table, seed int64) ([]*DataSet, []*DataSet) {
-		trainFolds := make([]*DataSet, repeat)
-		testFolds := make([]*DataSet, repeat)
-		rand.Seed(seed)
-		trainSet := NewDataSet(set)
-		testSize := int(float64(trainSet.UserCount()) * testRatio)
-		for i := 0; i < repeat; i++ {
-			trainUsers, trainItems, trainRatings :=
-				make([]int, 0, trainSet.Len()-trainSet.UserCount()),
-				make([]int, 0, trainSet.Len()-trainSet.UserCount()),
-				make([]float64, 0, trainSet.Len()-trainSet.UserCount())
-			testUsers, testItems, testRatings :=
-				make([]int, 0, trainSet.UserCount()),
-				make([]int, 0, trainSet.UserCount()),
-				make([]float64, 0, trainSet.UserCount())
-			userPerm := rand.Perm(trainSet.UserCount())
-			userTest := userPerm[:testSize]
-			userTrain := userPerm[testSize:]
-			userRatings := trainSet.DenseUserRatings
-			// Add all train user's ratings to train set
-			for _, userId := range userTrain {
-				userRatings[userId].ForEach(func(i, index int, value float64) {
-					trainUsers = append(trainUsers, userId)
-					trainItems = append(trainItems, index)
-					trainRatings = append(trainRatings, value)
-				})
-			}
-			// Add test user's ratings to train set and test set
-			for _, userId := range userTest {
-				ratingPerm := rand.Perm(userRatings[userId].Len())
-				for i, index := range ratingPerm {
-					if i < n {
-						trainUsers = append(trainUsers, userId)
-						trainItems = append(trainItems, userRatings[userId].Indices[index])
-						trainRatings = append(trainRatings, userRatings[userId].Values[index])
-					} else {
-						testUsers = append(testUsers, userId)
-						testItems = append(testItems, userRatings[userId].Indices[index])
-						testRatings = append(testRatings, userRatings[userId].Values[index])
-					}
-				}
-			}
-			trainFolds[i] = NewDataSet(NewDataTable(trainUsers, trainItems, trainRatings))
-			testFolds[i] = NewDataSet(NewDataTable(testUsers, testItems, testRatings))
+			trainFolds[i] = NewDataSet(trainUsers, trainItems, trainRatings)
+			testFolds[i] = NewDataSet(testUsers, testItems, testRatings)
 		}
 		return trainFolds, testFolds
 	}
